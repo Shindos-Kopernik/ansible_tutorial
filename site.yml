@@ -4,19 +4,29 @@
   become: true
   pre_tasks: # Задает приоритет в выполнении задания.
 
-  - name: install updates (Ubuntu)
+  - name: Update repo cache (Ubuntu)
     tags: always
     apt:
-      upgrade: yes
       update_cache: yes
+    changed_when: false
     when: ansible_distribution == "Ubuntu"
 
-  - name: install updates (CentOS)
+  - name: Update repo cache (CentOS)
     tags: always
     dnf:
-      update_only: yes
       update_cache: yes
+    changed_when: false
     when: ansible_distribution == "CentOS"
+
+- hosts: all
+  become: true
+  tasks:
+  
+  - name: add ssh key for simone
+    tags: always
+    authorized_key:
+      user: simone
+      key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJxrFJjCKQOKQ9yX/SBxtyj23n4VVYLgiLlk2/W61GBo ansible_key"
 
 - hosts: workstation
   become: true
@@ -29,8 +39,8 @@
   
   - name: install terraform
     unarchive:
-      #src: https://releases.hashicorp.com/terraform/0.12.28/terraform_0.12.28_linux_amd64.zip
-      src: https://releases.hashicorp.com/terraform/1.14.5/terraform_1.14.5_linux_amd64.zip
+      src: https://releases.hashicorp.com/terraform/0.12.28/terraform_0.12.28_linux_amd64.zip
+      #src: https://releases.hashicorp.com/terraform/1.14.5/terraform_1.14.5_linux_amd64.zip
       dest: /usr/local/bin
       remote_src: yes
       mode: 0755
@@ -60,6 +70,32 @@
         - php
       state: latest
     when: ansible_distribution == "CentOS"
+
+  - name: start httpd (CentOS)
+    tags: apache,centos,httpd
+    service:
+      name: httpd
+      state: started
+      enabled: yes
+    when: ansible_distribution == "CentOS"
+
+  - name: change e-mail address for admin
+    tags: apache,centos,httpd
+    lineinfile: # Изменяем строку в файле, но есть вероятность дублирования изменений. См. следующий блок.
+      path: /etc/httpd/conf/httpd.conf
+      regexp: '^ServerAdmin'
+      line: ServerAdmin somebody@somewhere.net
+    when: ansible_distribution == "CentOS"
+    register: httpd # Позволит сохранить значение в переменную. Здесь это имя переменной (httpd).
+
+  - name: restart httpd CentOS
+    tags: apache,centos,httpd
+    service: 
+      name: httpd
+      state: restarted
+    when: httpd.changed # Перезапуск сервера только в том случае, если переменная httpd
+    # изменила значение.
+
 
   - name: copy default html file for site
     tags: apache,apache2,httpd
